@@ -1,0 +1,7 @@
+# Perfil opt-in para desarrollo local: habilita la consola H2 (/h2-console) para inspeccionar
+# manualmente franja_horaria/cita durante quickstart.md. Activar con:
+#   ./gradlew bootRun --args='--spring.profiles.active=dev'
+spring:
+  h2:
+    console:
+      enabled: true

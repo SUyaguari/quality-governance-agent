@@ -16,7 +16,9 @@ spring:
 
   h2:
     console:
-      enabled: true
+      # Deshabilitada por defecto (superficie de ataque innecesaria fuera de desarrollo local).
+      # Se habilita solo con el perfil "dev" — ver application-dev.yml.
+      enabled: false
 
   jpa:
     hibernate:

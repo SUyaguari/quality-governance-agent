@@ -24,9 +24,16 @@ código de implementación — eso corresponde a `tasks.md` y a la fase de imple
 ./gradlew bootRun
 ```
 
-El servicio expone la API bajo `/api/v1` según `contracts/citasalud-api.yaml`, y la consola H2 (si
-está habilitada) en `/h2-console` para inspeccionar el estado de `franja_horaria` y `cita` durante
-la validación manual.
+El servicio expone la API bajo `/api/v1` según `contracts/citasalud-api.yaml`. La consola H2 está
+deshabilitada por defecto (riesgo de exposición innecesaria fuera de desarrollo local); para
+inspeccionar manualmente el estado de `franja_horaria` y `cita` durante la validación manual,
+levantar el servicio con el perfil `dev`:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+y acceder a `/h2-console`.
 
 ## Escenario 1 — Reserva exitosa fuera de horario de atención telefónica (Acceptance Scenario 1)
 
