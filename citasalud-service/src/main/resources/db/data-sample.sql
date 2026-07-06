@@ -1,0 +1,15 @@
+-- Datos de ejemplo (seed) para desarrollo/test — plan.md § Project Structure.
+-- No es un framework de migraciones (Flyway/Liquibase); esta historia solo necesita datos de
+-- lectura para poder ejecutar quickstart.md y las pruebas funcionales (YAGNI, Principio III).
+
+INSERT INTO medico (id, nombre) VALUES
+    ('11111111-1111-1111-1111-111111111111', 'Dra. Ana Torres'),
+    ('22222222-2222-2222-2222-222222222222', 'Dr. Luis Fernández');
+
+INSERT INTO franja_horaria (id, medico_id, fecha_hora, estado, bloqueada_por_paciente_id, bloqueada_hasta) VALUES
+    ('aaaaaaaa-0001-0001-0001-000000000001', '11111111-1111-1111-1111-111111111111', DATEADD('HOUR', 24, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL),
+    ('aaaaaaaa-0001-0001-0001-000000000002', '11111111-1111-1111-1111-111111111111', DATEADD('HOUR', 25, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL),
+    ('aaaaaaaa-0001-0001-0001-000000000003', '11111111-1111-1111-1111-111111111111', DATEADD('HOUR', 26, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL),
+    ('aaaaaaaa-0001-0001-0001-000000000004', '11111111-1111-1111-1111-111111111111', DATEADD('HOUR', 48, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL),
+    ('bbbbbbbb-0002-0002-0002-000000000001', '22222222-2222-2222-2222-222222222222', DATEADD('HOUR', 30, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL),
+    ('bbbbbbbb-0002-0002-0002-000000000002', '22222222-2222-2222-2222-222222222222', DATEADD('HOUR', 31, CURRENT_TIMESTAMP), 'DISPONIBLE', NULL, NULL);

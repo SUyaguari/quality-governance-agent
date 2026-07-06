@@ -1,0 +1,40 @@
+server:
+  # Alinea las rutas servidas con "servers: - url: /api/v1" del contrato (citasalud-api.yaml),
+  # sin tener que tocar los @RequestMapping generados por openapi-generator (Principio IV).
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: citasalud-service
+
+  datasource:
+    url: jdbc:h2:mem:citasalud;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  h2:
+    console:
+      enabled: true
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+    # Necesario para que data-sample.sql se cargue DESPUÉS de que Hibernate cree el esquema.
+    defer-datasource-initialization: true
+
+  # T010 (plan.md/tasks.md): cargar db/data-sample.sql después de que Hibernate cree el esquema.
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:db/data-sample.sql
+
+app:
+  notificaciones:
+    whatsapp:
+      base-url: https://example-whatsapp-provider.invalid/v1/messages
+      reintentos: 3
+      backoff-inicial-ms: 500

@@ -1,0 +1,142 @@
+{
+  "proyecto": "citasalud-service",
+  "version": "1.1.0",
+  "fecha": "2026-07-05",
+  "commit": null,
+  "tests": {
+    "comando": "./gradlew test jacocoTestReport --rerun-tasks (cuarta corrida, re-verificacion completa desde cero; se detuvo el daemon con ./gradlew --stop y se limpio manualmente un directorio de build bloqueado por OneDrive antes de re-ejecutar)",
+    "passed": 52,
+    "total": 52,
+    "coverage": 99.7,
+    "coverage_fuente": "build/reports/jacoco/test/jacocoTestReport.xml, counter type=LINE a nivel de <report>: missed=1, covered=332, total=333 => 99.70% (INSTRUCTION: covered=1331, missed=5 => 99.63%). Agregado de build/test-results/test/*.xml (22 archivos): tests=52, failures=0, errors=0. build/reports/tests/test/index.html confirma '52' en el contador de tests, '0' failures, '0' skipped. BUILD SUCCESSFUL.",
+    "notas": "CUARTA CORRIDA, verificacion independiente de punta a punta (no se asumio nada del historial). Se confirmo: (1) no existe ningun archivo *.disabled en src/ (find src -iname '*.disabled' => vacio); NotificacionCitaAdapterTest.java sigue activo con extension .java y sus 3 tests (FR-014/FR-016/FR-017) PASAN. (2) Cobertura por clase de NotificacionCitaAdapter y WhatsAppHttpSender: 100.00% LINE cada una (sin regresion). (3) Ninguna clase del proyecto tiene cobertura de linea por debajo de 80% (barrido completo del XML de JaCoCo, 0 clases bajo el umbral). (4) AccesoSinSesionTest.java ahora tiene 4 tests (antes 2 en la 3ra corrida): se agregaron given_sinSesion_when_bloqueaFranja_then_401 y given_sinSesion_when_confirmaCita_then_401, que cierran el hallazgo FR-005 de la 3ra corrida. Total de tests subio de 50 a 52 exactamente por estas 2 pruebas nuevas; el resto de la suite (18 clases de test restantes) se mantiene igual. PacienteAutenticadoAdapter: 88.89% LINE (por encima del umbral >80%)."
+  },
+  "security": {
+    "fuente": "Semgrep CLI real (uvx semgrep --config auto --json) sobre src/main/java: 46 archivos Java escaneados, 165 reglas aplicadas (118 Java + 47 multilenguaje), resultado 'Ran 165 rules on 46 files: 0 findings', 0 errores de parseo (~100% de lineas parseadas), reporte JSON verificado programaticamente (results=0, errors=[]). El Semgrep MCP no estuvo expuesto como herramienta invocable en este entorno de ejecucion (no hay tool semgrep_scan/security_check disponible); se uso el CLI equivalente via uvx para no dejar el pilar en 'desconocido'. Complementado con grep manual de secretos (password|secret|apikey|api_key|token|BEGIN PRIVATE KEY, case-insensitive) en src/main -- sin credenciales reales hardcodeadas (solo el literal 'apiKey' del esquema de seguridad en el contrato OpenAPI, que no es un secreto, y 'password: \"\"' vacio del datasource H2 en memoria de application.yml) -- y revision manual de SecurityConfig.java.",
+    "critical": 0,
+    "high": 0,
+    "secrets": 0,
+    "hallazgos": [
+      {
+        "severidad": "medium",
+        "regla": "revision-manual (no Semgrep)",
+        "archivo": "src/main/java/org/ups/citasalud/infrastructure/security/PacienteTestUserDetailsService.java",
+        "linea": 20,
+        "nota": "UserDetailsService in-memory con dos usuarios de prueba hardcodeados ('paciente1'/'paciente2') y contrasenas en texto plano con prefijo {noop} (sin hashing real). Documentado en el propio Javadoc de la clase como fixture minimo, conforme a las Assumptions del spec.md (la gestion real de identidad esta fuera de alcance de esta historia). No se cuenta como 'secrets' (no son credenciales de un sistema en produccion), pero se deja para triage si el proyecto se promueve a un ambiente productivo sin reemplazar este adaptador."
+      },
+      {
+        "severidad": "low",
+        "regla": "revision-manual (no Semgrep)",
+        "archivo": "src/main/resources/application.yml",
+        "linea": 19,
+        "nota": "H2 console habilitada (spring.h2.console.enabled: true) y expuesta con permitAll en SecurityConfig.java (/h2-console/**) sobre una base H2 en memoria de desarrollo/test. Riesgo bajo en este contexto (BD volatil, sin datos reales), pero a vigilar si se promueve tal cual a un perfil productivo."
+      }
+    ],
+    "endpoints_autenticacion": "SecurityConfig.java, lineas 30-32: .authorizeHttpRequests(auth -> auth.requestMatchers(\"/h2-console/**\").permitAll().anyRequest().authenticated()) -- exige HTTP Basic + sesion (SessionCreationPolicy.IF_REQUIRED) para toda ruta salvo /h2-console/**, con SesionNoIniciadaEntryPoint devolviendo 401 NO_AUTENTICADO. Verificado en tiempo de ejecucion, no solo por lectura del codigo: (a) GET /medicos sin sesion -> 401 (AccesoSinSesionTest.given_sinSesion_when_consultaMedicos_then_401; CitasControllerTest.given_sinSesion_when_getMedicos_then_401); (b) POST /franjas/{franjaId}/bloqueos sin sesion -> 401 (AccesoSinSesionTest.given_sinSesion_when_bloqueaFranja_then_401, linea 40-49 del archivo: restTemplate.postForEntity('/franjas/{franjaId}/bloqueos', null, ErrorResponse.class, franjaId) sobre una franja real creada via JdbcTemplate, sin autenticacion); (c) POST /citas sin sesion -> 401 (AccesoSinSesionTest.given_sinSesion_when_confirmaCita_then_401, linea 51-64: el paciente A bloquea la franja con sesion valida, y luego restTemplate.postForEntity('/citas', new ConfirmarCitaRequest(franjaId), ErrorResponse.class) SIN autenticacion). Las 3 pruebas (401 sobre GET /medicos, POST /franjas/{id}/bloqueos y POST /citas) PASAN: build/test-results/test/TEST-org.ups.citasalud.functional.AccesoSinSesionTest.xml reporta tests=4, failures=0, errors=0. NOTA: el test given_credencialesInvalidas_when_confirmaCita_then_401 (linea 29-36 del mismo archivo) tiene un nombre enganoso (menciona 'confirmaCita' pero internamente golpea GET /medicos con basic auth invalido); esto no afecta el veredicto porque los otros dos tests SI ejercitan directamente y con el nombre correcto los endpoints POST /franjas/{id}/bloqueos y POST /citas."
+  },
+  "spec": "specs/001-reserva-cita-online-24-7/spec.md",
+  "criteria": [
+    {
+      "id": "FR-001",
+      "fuente": "spec.md · FR-001 (consulta de medicos y franjas sin restriccion de horario)",
+      "status": "cumple",
+      "evidencia": "ListarMedicosUseCaseTest.given_medicosExistentes_when_ejecutar_then_retornaTodos; ConsultarFranjasDisponiblesUseCaseTest.given_medicoExistente_when_ejecutar_then_retornaFranjasDisponibles; CitasControllerTest.given_pacienteAutenticado_when_getMedicos_then_200; ReservaCitaExitosaTest (GET /medicos autenticado -> 200). Las 52 pruebas de la suite PASAN en esta corrida (BUILD SUCCESSFUL)."
+    },
+    {
+      "id": "FR-002",
+      "fuente": "spec.md · FR-002 (solo franjas futuras y dentro de agenda)",
+      "status": "cumple",
+      "evidencia": "FranjaHorariaTest (@Nested 'FR-002: franjas futuras'): given_fechaFutura_when_esFutura_then_true / given_fechaPasada_when_esFutura_then_false; ConsultarFranjasDisponiblesUseCaseTest verifica que el resultado solo contiene franjas con estado DISPONIBLE calculadas sobre 'ahora'. PASAN."
+    },
+    {
+      "id": "FR-003",
+      "fuente": "spec.md · FR-003 (seleccionar medico y franja disponible)",
+      "status": "cumple",
+      "evidencia": "BloquearFranjaUseCaseTest.given_franjaDisponible_when_ejecutar_then_quedaBloqueada (@DisplayName cita FR-003/FR-009). PASA."
+    },
+    {
+      "id": "FR-004",
+      "fuente": "spec.md · FR-004 (franja ocupada/bloqueada se muestra no disponible)",
+      "status": "cumple",
+      "evidencia": "BloquearFranjaUseCaseTest.given_franjaNoDisponible_when_ejecutar_then_lanzaFranjaNoDisponible; FranjaYaOcupadaTest.given_franjaOcupada_when_otroPacienteIntentaBloquear_then_409 (verifica ademas que la franja ocupada ya no aparece en el listado de disponibles); CitasControllerTest.given_franjaNoDisponible_when_bloquear_then_409. PASAN."
+    },
+    {
+      "id": "FR-005",
+      "fuente": "spec.md · FR-005 (exige sesion iniciada antes de SELECCIONAR o CONFIRMAR una franja, lineas 142-144 del spec.md)",
+      "status": "cumple",
+      "evidencia": "CONFIRMADO EN ESTA CORRIDA (hallazgo de la 3ra corrida cerrado): AccesoSinSesionTest.given_sinSesion_when_bloqueaFranja_then_401 (src/test/java/org/ups/citasalud/functional/AccesoSinSesionTest.java, lineas 38-49) crea una franja disponible real via JdbcTemplate y ejecuta restTemplate.postForEntity('/franjas/{franjaId}/bloqueos', null, ErrorResponse.class, franjaId) SIN ninguna credencial, verificando 401 UNAUTHORIZED y code=NO_AUTENTICADO. AccesoSinSesionTest.given_sinSesion_when_confirmaCita_then_401 (lineas 51-64) hace que el paciente A bloquee la franja con sesion valida y luego ejecuta restTemplate.postForEntity('/citas', new ConfirmarCitaRequest(franjaId), ErrorResponse.class) SIN autenticacion, verificando el mismo 401/NO_AUTENTICADO. Ambos endpoints POST exigidos por FR-005 (seleccionar y confirmar) quedan cubiertos por pruebas reales, no por inferencia. Evidencia de ejecucion: build/test-results/test/TEST-org.ups.citasalud.functional.AccesoSinSesionTest.xml reporta tests=4, failures=0, errors=0 (subio de 2 a 4 respecto a la 3ra corrida). Suite completa re-ejecutada desde cero: 52/52 tests PASAN."
+    },
+    {
+      "id": "FR-006",
+      "fuente": "spec.md · FR-006 (usa el WhatsApp del perfil, no se vuelve a pedir en el flujo)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_franjaBloqueadaYSinLimite_when_ejecutar_then_registraCita: verify(notificacionCitaPort).enviarConfirmacion(any(Cita.class), eq(paciente.nombreCompleto()), eq(paciente.numeroWhatsApp())) -- el numero proviene de PacienteAutenticado (obtenido del contexto de seguridad), nunca de un parametro del request de confirmacion. PASA."
+    },
+    {
+      "id": "FR-008",
+      "fuente": "spec.md · FR-008 (confirmar solo si la franja sigue bloqueada a favor del paciente)",
+      "status": "cumple",
+      "evidencia": "FranjaHorariaTest (@Nested 'FR-008/FR-013: confirmacion'): given_bloqueadaVigente_when_confirmarPara_then_ocupada, given_bloqueadaPorOtro_when_confirmarPara_then_lanzaExcepcion; ConfirmarCitaUseCaseTest.given_bloqueoExpirado_when_ejecutar_then_lanzaFranjaNoDisponible. PASAN."
+    },
+    {
+      "id": "FR-009",
+      "fuente": "spec.md · FR-009 (bloqueo temporal impide seleccion/confirmacion por otro paciente)",
+      "status": "cumple",
+      "evidencia": "BloquearFranjaUseCaseTest.given_franjaDisponible_when_ejecutar_then_quedaBloqueada; FranjaHorariaTest (@Nested 'FR-009: bloqueo temporal'); BloqueoConcurrenteTest.given_franjaBloqueadaPorA_when_bIntentaBloquearla_then_noDisponibleParaB (funcional, dos pacientes reales via HTTP, el segundo recibe 409 FRANJA_NO_DISPONIBLE). PASAN. CAVEAT (re-verificado en esta corrida, sin cambios): BloqueoConcurrenteTest ejecuta las dos solicitudes de forma SECUENCIAL (postForEntity de A, luego de B); grep de 'Thread|ExecutorService|CountDownLatch|CompletableFuture' en src/test devuelve 0 resultados. Demuestra el mecanismo de bloqueo pero no una carrera de hilos genuinamente simultanea. No cambia el status (la garantia de UPDATE condicional atomico en BD es razonable), pero se documenta como limitacion de la prueba."
+    },
+    {
+      "id": "FR-010",
+      "fuente": "spec.md · FR-010 (liberacion automatica del bloqueo tras 5 minutos)",
+      "status": "cumple",
+      "evidencia": "ExpiracionBloqueoTest.given_bloqueoTemporal_when_pasanMasDe5Minutos_then_seLiberaAutomaticamente: usa RelojControlable para avanzar el tiempo mas alla de BloquearFranjaUseCase.DURACION_BLOQUEO y verifica (a) que la confirmacion es rechazada con 409 FRANJA_NO_DISPONIBLE y (b) que la franja vuelve a listarse como disponible para otro paciente. PASA."
+    },
+    {
+      "id": "FR-011",
+      "fuente": "spec.md · FR-011 (registro unico de la cita asociando paciente/medico/franja)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_franjaBloqueadaYSinLimite_when_ejecutar_then_registraCita valida pacienteId y franjaHorariaId asociados en la Cita resultante; ReservaCitaExitosaTest (e2e) confirma que la cita registrada aparece luego en GET /citas del paciente. PASAN."
+    },
+    {
+      "id": "FR-012",
+      "fuente": "spec.md · FR-012 (nunca mas de una cita por la misma solicitud de confirmacion; edge case 'doble confirmacion accidental')",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_solicitudDuplicada_when_seReintentaConfirmar_then_fallaSinDuplicar (@DisplayName cita FR-012): la segunda llamada a ejecutar() sobre la misma franja lanza FranjaNoDisponibleException porque confirmarSiBloqueadaPorPaciente (escritura condicional) devuelve false en el segundo intento. PASA. CAVEAT (sin cambios respecto a corridas previas): la prueba invoca la operacion dos veces de forma secuencial en el mismo hilo, no concurrente."
+    },
+    {
+      "id": "FR-013",
+      "fuente": "spec.md · FR-013 (rechazar confirmacion si la franja ya no esta disponible)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_bloqueoExpirado_when_ejecutar_then_lanzaFranjaNoDisponible (@DisplayName cita FR-013); FranjaHorariaTest.given_bloqueoVencido_when_confirmarPara_then_lanzaExcepcion; ExpiracionBloqueoTest (funcional, 409 FRANJA_NO_DISPONIBLE tras expirar el bloqueo). PASAN."
+    },
+    {
+      "id": "FR-014",
+      "fuente": "spec.md · FR-014 (envio de confirmacion por WhatsApp tras registrar la cita)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_franjaBloqueadaYSinLimite_when_ejecutar_then_registraCita verifica la invocacion de notificacionCitaPort.enviarConfirmacion tras guardar la cita; NotificacionCitaAdapterTest.given_proveedorResponde_when_enviarConfirmacion_then_noLanzaExcepcion (@DisplayName cita FR-014) ejercita la integracion real via MockRestServiceServer. Ambas PASAN."
+    },
+    {
+      "id": "FR-016",
+      "fuente": "spec.md · FR-016 (reintento automatico si falla el envio de confirmacion)",
+      "status": "cumple",
+      "evidencia": "NotificacionCitaAdapterTest.given_proveedorFallaDosVeces_when_enviarConfirmacion_then_reintentaYTieneExito (@DisplayName cita FR-016): proxy AOP con RetryInterceptor real de spring-retry (RetryTemplate maxAttempts=3) envolviendo WhatsAppHttpSender real contra un MockRestServiceServer que responde error 2 veces y exito a la 3ra; server.verify() confirma las 3 llamadas HTTP reales. PASA (archivo activo, sin extension .disabled). build/test-results/test/TEST-org.ups.citasalud.functional... NotificacionCitaAdapterTest.xml: tests=3, failures=0, errors=0. Cobertura de linea: WhatsAppHttpSender 100.00%, NotificacionCitaAdapter 100.00% (ambas por encima del umbral >80% de la constitution v1.1.0)."
+    },
+    {
+      "id": "FR-017",
+      "fuente": "spec.md · FR-017 (la cita nunca se revierte por falla de WhatsApp; el fallo queda registrado)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_envioFalla_when_ejecutar_then_citaQuedaRegistradaComoFallida (@DisplayName cita FR-017): mockea notificacionCitaPort.enviarConfirmacion para lanzar NotificacionFallidaException y verifica que la Cita se guarda con estadoNotificacion=FALLIDA (verify(citaRepositoryPort, times(2)).guardar(...)), sin relanzar la excepcion al llamador. NotificacionCitaAdapterTest.given_proveedorFallaSiempre_when_enviarConfirmacion_then_lanzaNotificacionFallidaTrasAgotarReintentos (@DisplayName cita FR-017/SC-007) ejercita el agotamiento real de los 3 reintentos contra el stub HTTP. Ambas PASAN."
+    },
+    {
+      "id": "FR-018",
+      "fuente": "spec.md · FR-018 (maximo 2 citas activas por paciente)",
+      "status": "cumple",
+      "evidencia": "ConfirmarCitaUseCaseTest.given_limiteDeCitasAlcanzado_when_ejecutar_then_lanzaLimiteExcedido (@DisplayName cita FR-018); LimiteCitasActivasTest.given_pacienteCon2CitasActivas_when_confirmaUnaTercera_then_rechazadaPorLimite (funcional, e2e via HTTP: 2 citas reales reservadas y la 3ra rechazada con 409 LIMITE_CITAS_ACTIVAS_EXCEDIDO). PASAN."
+    },
+    {
+      "id": "FR-015",
+      "fuente": "spec.md · FR-015 (flujo completo sin llamada telefonica ni intervencion humana)",
+      "status": "cumple",
+      "evidencia": "ReservaCitaExitosaTest.given_pacienteAutenticado_when_eligeYConfirma_then_citaRegistrada ejercita de punta a punta login (HTTP Basic via FunctionalTestBase.como()) -> GET /medicos -> POST /franjas/{id}/bloqueos -> POST /citas -> GET /citas, exclusivamente via HTTP/REST, sin ningun paso manual. PASA. Complementado con revision estructural: src/main no contiene ningun mecanismo de intervencion telefonica/humana (no hay endpoints, colas ni integraciones de call-center); el unico canal de salida es WhatsAppHttpSender, que es automatico. El cumplimiento se apoya en el flujo e2e automatizado mas la ausencia estructural de canales manuales, no en una sola asercion negativa puntual."
+    }
+  ]
+}

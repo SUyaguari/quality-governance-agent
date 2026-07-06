@@ -1,0 +1,139 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.openapi.generator' version '7.10.0'
+    id 'jacoco'
+}
+
+group = 'org.ups'
+version = '0.0.1-SNAPSHOT'
+description = 'citasalud-service'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    generatedApiPackage = 'org.ups.citasalud.infrastructure.web.generated.api'
+    generatedModelPackage = 'org.ups.citasalud.infrastructure.web.generated.model'
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-h2console'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    implementation 'org.springframework.retry:spring-retry:2.0.10'
+    implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+    implementation 'io.swagger.core.v3:swagger-annotations:2.2.25'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testCompileOnly 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "${buildDir}/generated/openapi/src/main/java"
+        }
+    }
+}
+
+openApiGenerate {
+    generatorName = 'spring'
+    inputSpec = "${projectDir}/src/main/resources/openapi/citasalud-api.yaml"
+    outputDir = "${buildDir}/generated/openapi"
+    apiPackage = generatedApiPackage
+    modelPackage = generatedModelPackage
+    invokerPackage = 'org.ups.citasalud.infrastructure.web.generated.invoker'
+    configOptions = [
+        interfaceOnly       : 'true',
+        useSpringBoot3      : 'true',
+        useTags             : 'true',
+        skipDefaultInterface: 'true',
+        dateLibrary         : 'java8'
+    ]
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('openApiGenerate')
+}
+
+jacoco {
+    toolVersion = '0.8.13'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                'org/ups/citasalud/infrastructure/web/generated/**',
+                // Bootstrap class: una sola línea delegando a SpringApplication.run(); su
+                // correcto arranque ya lo prueba toda la suite de pruebas funcionales
+                // (@SpringBootTest), aunque no invoquen main() literalmente. Exclusión estándar.
+                'org/ups/citasalud/CitasaludServiceApplication.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                'org/ups/citasalud/infrastructure/web/generated/**',
+                // Bootstrap class: una sola línea delegando a SpringApplication.run(); su
+                // correcto arranque ya lo prueba toda la suite de pruebas funcionales
+                // (@SpringBootTest), aunque no invoquen main() literalmente. Exclusión estándar.
+                'org/ups/citasalud/CitasaludServiceApplication.class'
+            ])
+        }))
+    }
+    violationRules {
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+            excludes = ['org.ups.citasalud.infrastructure.web.generated.*', 'org.ups.citasalud.CitasaludServiceApplication']
+        }
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn jacocoTestCoverageVerification
+}

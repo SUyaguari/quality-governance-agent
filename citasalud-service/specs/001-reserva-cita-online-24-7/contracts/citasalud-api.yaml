@@ -1,0 +1,277 @@
+openapi: 3.0.3
+info:
+  title: CitaSalud API — Reserva de cita en línea 24/7
+  description: >
+    Contrato OpenAPI para US-01 (E-01). Cubre exclusivamente la consulta de disponibilidad,
+    el bloqueo temporal de una franja horaria y la confirmación de una cita por parte de un
+    paciente autenticado. La gestión de agendas médicas y la creación/autenticación de cuentas
+    de paciente están fuera de alcance de este contrato (ver spec.md, sección Assumptions).
+  version: 1.0.0
+servers:
+  - url: /api/v1
+
+security:
+  - sessionAuth: []
+
+tags:
+  - name: Medicos
+    description: Consulta de médicos y franjas horarias disponibles.
+  - name: Franjas
+    description: Bloqueo temporal de una franja horaria seleccionada.
+  - name: Citas
+    description: Confirmación y consulta de citas del paciente autenticado.
+
+paths:
+  /medicos:
+    get:
+      operationId: listarMedicos
+      tags: [Medicos]
+      summary: Lista los médicos disponibles para agendar.
+      responses:
+        "200":
+          description: Lista de médicos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Medico"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+
+  /medicos/{medicoId}/franjas:
+    get:
+      operationId: listarFranjasDisponibles
+      tags: [Medicos]
+      summary: Lista las franjas horarias disponibles de un médico (FR-001, FR-002).
+      parameters:
+        - name: medicoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: desde
+          in: query
+          description: Fecha/hora mínima a considerar (por defecto, el instante actual).
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          description: Fecha/hora máxima a considerar.
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: >
+            Franjas horarias futuras del médico que están actualmente disponibles.
+            Nunca incluye franjas pasadas, ocupadas o bloqueadas por otro paciente (FR-002, FR-004).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FranjaHoraria"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+        "404":
+          $ref: "#/components/responses/MedicoNoEncontrado"
+
+  /franjas/{franjaId}/bloqueos:
+    post:
+      operationId: bloquearFranjaTemporalmente
+      tags: [Franjas]
+      summary: Bloquea temporalmente una franja disponible a favor del paciente autenticado (FR-009).
+      parameters:
+        - name: franjaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Franja bloqueada temporalmente por 5 minutos a favor del paciente autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BloqueoTemporal"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+        "404":
+          $ref: "#/components/responses/FranjaNoEncontrada"
+        "409":
+          description: >
+            La franja ya está ocupada o bloqueada temporalmente por otro paciente (FR-004).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citas:
+    get:
+      operationId: listarMisCitasActivas
+      tags: [Citas]
+      summary: Lista las citas activas (futuras) del paciente autenticado.
+      responses:
+        "200":
+          description: Citas activas del paciente autenticado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cita"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+    post:
+      operationId: confirmarCita
+      tags: [Citas]
+      summary: Confirma la reserva de una franja previamente bloqueada por el paciente autenticado (FR-008, FR-011).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmarCitaRequest"
+      responses:
+        "201":
+          description: >
+            Cita registrada (FR-011). El envío de la confirmación por WhatsApp se dispara de forma
+            asíncrona (FR-014/FR-016) y no bloquea esta respuesta (FR-017).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cita"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+        "404":
+          $ref: "#/components/responses/FranjaNoEncontrada"
+        "409":
+          description: >
+            La franja ya no está disponible (bloqueo vencido u ocupada por otra vía, FR-013), o el
+            paciente ya alcanzó el límite de 2 citas activas (FR-018). El campo `code` de
+            `ErrorResponse` distingue el motivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: >
+        Sesión autenticada del paciente (FR-005). El mecanismo de creación de cuenta y login en sí
+        no forma parte de este contrato.
+
+  responses:
+    NoAutenticado:
+      description: El paciente no tiene una sesión iniciada (FR-005, SC-006).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    MedicoNoEncontrado:
+      description: No existe un médico con ese identificador.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    FranjaNoEncontrada:
+      description: No existe una franja horaria con ese identificador.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Medico:
+      type: object
+      required: [id, nombre]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+
+    FranjaHoraria:
+      type: object
+      required: [id, medicoId, fechaHora, estado]
+      properties:
+        id:
+          type: string
+          format: uuid
+        medicoId:
+          type: string
+          format: uuid
+        fechaHora:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [DISPONIBLE, BLOQUEADA_TEMPORALMENTE, OCUPADA]
+
+    BloqueoTemporal:
+      type: object
+      required: [franjaId, bloqueadaHasta]
+      properties:
+        franjaId:
+          type: string
+          format: uuid
+        bloqueadaHasta:
+          type: string
+          format: date-time
+          description: Instante en que expira el bloqueo si no se confirma (FR-010, 5 minutos).
+
+    ConfirmarCitaRequest:
+      type: object
+      required: [franjaId]
+      properties:
+        franjaId:
+          type: string
+          format: uuid
+          description: Franja previamente bloqueada por el paciente autenticado (FR-008).
+
+    Cita:
+      type: object
+      required: [id, medicoId, franjaHorariaId, fechaHoraCita, estadoNotificacion]
+      properties:
+        id:
+          type: string
+          format: uuid
+        medicoId:
+          type: string
+          format: uuid
+        franjaHorariaId:
+          type: string
+          format: uuid
+        fechaHoraCita:
+          type: string
+          format: date-time
+        estadoNotificacion:
+          type: string
+          enum: [PENDIENTE, ENVIADA, FALLIDA]
+          description: Resultado del envío de la confirmación por WhatsApp (FR-014/FR-016/FR-017).
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - NO_AUTENTICADO
+            - MEDICO_NO_ENCONTRADO
+            - FRANJA_NO_ENCONTRADA
+            - FRANJA_NO_DISPONIBLE
+            - LIMITE_CITAS_ACTIVAS_EXCEDIDO
+        message:
+          type: string
